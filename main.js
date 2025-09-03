@@ -21,6 +21,10 @@ class BibiGPTAutomation {
         this.formFiller = new FormFiller();
         this.csvReader = new CSVReader();
         this.pageSaver = new PageSaver();
+
+        // 循环处理状态
+        this.currentRow = 1; // 从第二行开始（索引1，第一个视频）
+        this.maxRows = 0;
         
         // 配置
         this.config = {
@@ -87,18 +91,18 @@ class BibiGPTAutomation {
     }
 
     /**
-     * 设置广告拦截
+     * 简单按ESC关闭弹窗
      */
-    async setupAdBlocking() {
-        console.log('🛡️ 设置广告拦截...');
+    async pressEscapeToClosePopups() {
+        console.log('⌨️ 按ESC关闭可能的弹窗...');
 
-        // 1. 启动广告拦截系统
-        await this.adBlocker.startBlocking(this.page);
+        // 连续按3次ESC，确保关闭各种弹窗
+        for (let i = 0; i < 3; i++) {
+            await this.page.keyboard.press('Escape');
+            await this.page.waitForTimeout(500);
+        }
 
-        // 2. 强制清理广告
-        await this.adBlocker.forceCleanAds(this.page);
-
-        console.log('✅ 广告拦截设置完成');
+        console.log('✅ ESC按键完成');
     }
 
     /**
@@ -235,7 +239,7 @@ class BibiGPTAutomation {
         try {
             console.log('🔍 开始监控页面URL变化...');
 
-            // 等待页面跳转到content页面
+            // 等待页面跳转到content页面，同时监听余额不足
             let contentPageReached = false;
             let attempts = 0;
             const maxAttempts = 30; // 最多等待30次，每次2秒
@@ -243,6 +247,17 @@ class BibiGPTAutomation {
             while (!contentPageReached && attempts < maxAttempts) {
                 const currentUrl = this.page.url();
                 console.log(`🔗 当前URL: ${currentUrl}`);
+
+                // 在等待过程中检查余额不足和Failed to fetch错误
+                const errorCheck = await this.checkDesktopErrors();
+                if (errorCheck.hasPaymentRequired) {
+                    console.log('💳 在等待跳转时检测到余额不足');
+                    throw new Error('PAYMENT_REQUIRED');
+                }
+                if (errorCheck.hasFailedToFetch) {
+                    console.log('❌ 在等待跳转时检测到Failed to fetch');
+                    throw new Error('FAILED_TO_FETCH');
+                }
 
                 // 检查是否到达content页面
                 if (currentUrl.includes('/content/')) {
@@ -264,13 +279,26 @@ class BibiGPTAutomation {
             console.log('⏰ 等待content页面完全加载...');
             await this.page.waitForTimeout(3000);
 
-            // 检测并关闭driver overlay
-            console.log('🛡️ 检测并关闭遮罩层...');
-            await this.handleDriverOverlay();
+            // 检查是否出现余额不足提示
+            const paymentRequired = await this.checkPaymentRequired();
+            if (paymentRequired) {
+                console.log('💳 检测到余额不足，需要重新注册账号');
+                throw new Error('PAYMENT_REQUIRED');
+            }
+
+            // 按ESC关闭遮罩层
+            console.log('⌨️ 按ESC关闭遮罩层...');
+            await this.page.keyboard.press('Escape');
+            await this.page.waitForTimeout(3000);
+            await this.page.keyboard.press('Escape');
+            await this.page.waitForTimeout(1000);
 
             // 等待内容稳定
             console.log('⏰ 等待内容稳定...');
-            await this.page.waitForTimeout(2000);
+            await this.page.waitForTimeout(5000); // 增加到5秒
+
+            // 点击下拉按钮
+            await this.clickDropdownButton();
 
             // 保存完整页面内容
             console.log('💾 保存完整页面内容...');
@@ -300,32 +328,488 @@ class BibiGPTAutomation {
         }
     }
 
+
+
     /**
-     * 处理driver overlay遮罩层 - 按指定时序按ESC
+     * 开始视频循环处理（包含第一轮）
      */
-    async handleDriverOverlay() {
+    async startVideoLoop() {
+        console.log('');
+        console.log('🔄 ==========================================');
+        console.log('🔄 第二阶段：循环处理所有视频');
+        console.log('🔄 ==========================================');
+
         try {
-            console.log('🎯 开始处理遮罩层...');
+            // 读取CSV文件
+            console.log('📊 读取CSV文件...');
+            const fs = require('fs');
+            if (!fs.existsSync(this.config.csvFilePath)) {
+                console.log('⚠️ CSV文件不存在，创建示例文件...');
+                this.csvReader.createSampleCSV(this.config.csvFilePath);
+            }
 
-            // 第一次按ESC
-            console.log('⌨️ 第1次按ESC键...');
-            await this.page.keyboard.press('Escape');
+            this.csvReader.readCSV(this.config.csvFilePath);
+            const csvData = this.csvReader.getAllData();
+            this.maxRows = csvData.length;
 
-            // 等待3秒
-            console.log('⏰ 等待3秒...');
-            await this.page.waitForTimeout(3000);
+            console.log(`📊 CSV总行数: ${this.maxRows}`);
+            console.log(`🎯 开始处理，从第 ${this.currentRow + 1} 行开始`);
 
-            // 第二次按ESC
-            console.log('⌨️ 第2次按ESC键...');
-            await this.page.keyboard.press('Escape');
+            const processedVideos = [];
 
-            // 等待1秒确保处理完成
-            await this.page.waitForTimeout(1000);
+            // 循环处理所有视频
+            while (this.currentRow < this.maxRows) {
+                console.log('');
+                console.log(`🎬 ==========================================`);
+                console.log(`🎬 处理第 ${this.currentRow + 1} 行视频`);
+                console.log(`🎬 ==========================================`);
 
-            console.log('✅ 遮罩层处理完成（按ESC两次，间隔3秒）');
+                const videoResult = await this.processVideoRound();
+                processedVideos.push(videoResult);
+
+                if (!videoResult.success) {
+                    // 检查是否是余额不足错误
+                    if (videoResult.error === 'PAYMENT_REQUIRED') {
+                        console.log('💳 余额不足，重新注册新账号...');
+
+                        // 重新注册账号（全新浏览器）
+                        const reRegisterResult = await this.reRegisterAccount();
+
+                        if (reRegisterResult.success) {
+                            console.log('✅ 重新注册成功，重试当前视频');
+
+                            // 重试当前视频
+                            const retryResult = await this.retryCurrentVideo();
+                            processedVideos.push(retryResult);
+
+                            if (retryResult.success) {
+                                console.log('✅ 重试成功');
+                            } else {
+                                console.log('❌ 重试失败，跳过当前视频');
+                            }
+                        } else {
+                            console.log('❌ 重新注册失败，跳过当前视频');
+                        }
+                    } else if (videoResult.error === 'FAILED_TO_FETCH') {
+                        console.log('❌ Failed to fetch错误，添加备注并跳到下一行');
+
+                        // 在CSV第三列添加备注
+                        this.csvReader.addNoteToCSV(this.currentRow, 'Failed to fetch', this.config.csvFilePath);
+
+                        // 跳到下一行继续处理
+                        console.log('⏭️ 跳过当前视频，继续处理下一个');
+                    } else {
+                        console.log(`⚠️ 第 ${this.currentRow + 1} 行处理失败，继续下一个`);
+                    }
+                }
+
+                this.currentRow++;
+
+                console.log(`✅ 第 ${this.currentRow} 行处理完成`);
+
+                // 如果不是最后一个视频，稍作等待
+                if (this.currentRow < this.maxRows) {
+                    console.log('⏰ 等待2秒后处理下一个视频...');
+                    await this.page.waitForTimeout(2000);
+                }
+            }
+
+            console.log('🎉 所有视频处理完成！');
+
+            return {
+                success: true,
+                totalProcessed: processedVideos.length,
+                processedVideos: processedVideos
+            };
 
         } catch (error) {
-            console.log(`⚠️ 处理遮罩层时出错: ${error.message}`);
+            console.error(`❌ 视频循环处理失败: ${error.message}`);
+
+            return {
+                success: false,
+                error: error.message,
+                processedCount: this.currentRow - 1
+            };
+        }
+    }
+
+    /**
+     * 处理一轮完整的视频操作
+     */
+    async processVideoRound() {
+        try {
+            // 1. 导航到桌面版页面
+            console.log('🌐 导航到BibiGPT桌面版页面...');
+            await this.navigateToDesktopPage();
+
+            // 按ESC关闭可能的弹窗
+            await this.pressEscapeToClosePopups();
+
+            // 2. 读取当前行的视频链接
+            const videoLink = this.csvReader.getCell(this.currentRow, 0);
+            console.log(`🔗 获取视频链接: ${videoLink}`);
+
+            // 验证链接格式
+            if (!this.csvReader.validateLink(videoLink)) {
+                throw new Error(`无效的链接格式: ${videoLink}`);
+            }
+
+            // 3. 输入视频链接并提交
+            console.log('📝 输入视频链接到页面...');
+            const inputResult = await this.formFiller.inputVideoLink(this.page, videoLink, {
+                clearFirst: true,
+                pressEnter: true,
+                waitAfterInput: 1000
+            });
+
+            if (!inputResult.success) {
+                throw new Error(`视频链接输入失败: ${inputResult.error}`);
+            }
+
+            // 4. 监控content页面并保存
+            const contentResult = await this.monitorContentPage();
+
+            if (!contentResult.success) {
+                // 传递特殊错误类型
+                if (contentResult.error === 'PAYMENT_REQUIRED') {
+                    throw new Error('PAYMENT_REQUIRED');
+                } else if (contentResult.error === 'FAILED_TO_FETCH') {
+                    throw new Error('FAILED_TO_FETCH');
+                } else {
+                    throw new Error(`content页面监控失败: ${contentResult.error}`);
+                }
+            }
+
+            // 下一轮将直接访问desktop页面，无需额外操作
+
+            return {
+                success: true,
+                row: this.currentRow + 1,
+                link: videoLink,
+                inputResult: inputResult,
+                contentResult: contentResult
+            };
+
+        } catch (error) {
+            console.error(`❌ 处理视频轮次失败: ${error.message}`);
+
+            return {
+                success: false,
+                row: this.currentRow + 1,
+                error: error.message
+            };
+        }
+    }
+
+
+
+    /**
+     * 重试当前视频
+     */
+    async retryCurrentVideo() {
+        try {
+            console.log('');
+            console.log('🔄 ==========================================');
+            console.log(`🔄 重试第 ${this.currentRow + 1} 行视频`);
+            console.log('🔄 ==========================================');
+
+            // 获取当前行的视频链接
+            const videoLink = this.csvReader.getCell(this.currentRow, 0);
+            console.log(`🔗 重试视频链接: ${videoLink}`);
+
+            // 1. 导航到桌面版页面
+            console.log('🌐 导航到BibiGPT桌面版页面...');
+            await this.navigateToDesktopPage();
+
+            // 按ESC关闭可能的弹窗
+            await this.pressEscapeToClosePopups();
+
+            // 2. 验证链接格式
+            if (!this.csvReader.validateLink(videoLink)) {
+                throw new Error(`无效的链接格式: ${videoLink}`);
+            }
+
+            // 3. 输入视频链接并提交
+            console.log('📝 输入视频链接到页面...');
+            const inputResult = await this.formFiller.inputVideoLink(this.page, videoLink, {
+                clearFirst: true,
+                pressEnter: true,
+                waitAfterInput: 1000
+            });
+
+            if (!inputResult.success) {
+                throw new Error(`视频链接输入失败: ${inputResult.error}`);
+            }
+
+            // 4. 监控content页面并保存
+            const contentResult = await this.monitorContentPage();
+
+            if (!contentResult.success) {
+                // 如果还是余额不足，返回失败
+                if (contentResult.error === 'PAYMENT_REQUIRED') {
+                    throw new Error('PAYMENT_REQUIRED');
+                } else {
+                    throw new Error(`content页面监控失败: ${contentResult.error}`);
+                }
+            }
+
+            return {
+                success: true,
+                row: this.currentRow + 1,
+                link: videoLink,
+                inputResult: inputResult,
+                contentResult: contentResult,
+                isRetry: true
+            };
+
+        } catch (error) {
+            console.error(`❌ 重试视频失败: ${error.message}`);
+
+            return {
+                success: false,
+                row: this.currentRow + 1,
+                error: error.message,
+                isRetry: true
+            };
+        }
+    }
+
+    /**
+     * 重新注册账号 - 使用全新浏览器
+     */
+    async reRegisterAccount() {
+        try {
+            console.log('');
+            console.log('🔄 ==========================================');
+            console.log('🔄 重新注册新账号（全新浏览器）');
+            console.log('🔄 ==========================================');
+
+            // 1. 关闭当前浏览器
+            console.log('🔄 关闭当前浏览器...');
+            if (this.browser) {
+                await this.browser.close();
+            }
+
+            // 2. 重新初始化全新浏览器
+            console.log('🌐 启动全新浏览器...');
+            await this.initBrowser();
+
+            // 3. 导航到注册页面
+            console.log('🌐 导航到注册页面...');
+            await this.navigateToRegisterPage();
+
+            // 4. 按ESC关闭弹窗
+            await this.pressEscapeToClosePopups();
+
+            // 5. 自动注册新账号
+            console.log('📝 开始注册新账号...');
+            const registerResult = await this.autoRegister();
+
+            if (registerResult.success) {
+                console.log('✅ 新账号注册成功');
+                console.log(`📧 新邮箱: ${registerResult.email}`);
+
+                // 等待注册后页面稳定
+                await this.page.waitForTimeout(3000);
+
+                return {
+                    success: true,
+                    email: registerResult.email
+                };
+            } else {
+                throw new Error(`新账号注册失败: ${registerResult.error}`);
+            }
+
+        } catch (error) {
+            console.error(`❌ 重新注册账号失败: ${error.message}`);
+
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * 检查desktop页面的各种错误
+     */
+    async checkDesktopErrors() {
+        try {
+            // 获取页面内容
+            const pageContent = await this.page.textContent('body');
+
+            const result = {
+                hasPaymentRequired: false,
+                hasFailedToFetch: false
+            };
+
+            if (pageContent) {
+                // 检测余额不足
+                const paymentTexts = [
+                    "余额不足啦",
+                    "请升级会员或购买时长哦"
+                ];
+
+                for (const text of paymentTexts) {
+                    if (pageContent.includes(text)) {
+                        console.log(`💳 检测到余额不足文本: "${text}"`);
+                        result.hasPaymentRequired = true;
+                        break;
+                    }
+                }
+
+                // 检测Failed to fetch错误
+                const fetchErrorTexts = [
+                    "Failed to fetch",
+                    "fetch failed",
+                    "网络请求失败",
+                    "请求失败"
+                ];
+
+                for (const text of fetchErrorTexts) {
+                    if (pageContent.includes(text)) {
+                        console.log(`❌ 检测到Failed to fetch错误: "${text}"`);
+                        result.hasFailedToFetch = true;
+                        break;
+                    }
+                }
+            }
+
+            return result;
+
+        } catch (error) {
+            console.log(`⚠️ 检查desktop页面错误时出错: ${error.message}`);
+            return {
+                hasPaymentRequired: false,
+                hasFailedToFetch: false
+            };
+        }
+    }
+
+    /**
+     * 检查是否出现余额不足提示
+     */
+    async checkPaymentRequired() {
+        try {
+            console.log('💳 检查是否出现余额不足提示...');
+
+            // 检查页面中是否包含余额不足的文本
+            const paymentRequiredSelectors = [
+                // 检查页面标题
+                'h1:has-text("Payment Required")',
+                'h2:has-text("Payment Required")',
+                'h3:has-text("Payment Required")',
+
+                // 检查包含余额不足文本的元素
+                'text="Payment Required"',
+                'text="余额不足"',
+                'text="请升级会员"',
+                'text="购买时长"',
+
+                // 检查包含相关文本的任何元素
+                '*:has-text("Payment Required")',
+                '*:has-text("余额不足啦")',
+                '*:has-text("请升级会员或购买时长哦")',
+
+                // 检查错误提示容器
+                'div[class*="error"]:has-text("Payment")',
+                'div[class*="alert"]:has-text("余额")',
+                'div[class*="warning"]:has-text("会员")'
+            ];
+
+            for (const selector of paymentRequiredSelectors) {
+                try {
+                    const element = this.page.locator(selector).first();
+                    if (await element.isVisible()) {
+                        console.log(`💳 检测到余额不足提示: ${selector}`);
+                        return true;
+                    }
+                } catch (error) {
+                    continue;
+                }
+            }
+
+            // 检查页面内容是否包含相关文本
+            const pageContent = await this.page.textContent('body');
+            const paymentKeywords = [
+                'Payment Required',
+                '余额不足',
+                '请升级会员',
+                '购买时长',
+                '会员已过期',
+                '账户余额不足'
+            ];
+
+            for (const keyword of paymentKeywords) {
+                if (pageContent && pageContent.includes(keyword)) {
+                    console.log(`💳 页面内容包含余额不足关键词: ${keyword}`);
+                    return true;
+                }
+            }
+
+            console.log('✅ 未检测到余额不足提示');
+            return false;
+
+        } catch (error) {
+            console.log(`⚠️ 检查余额状态时出错: ${error.message}`);
+            return false;
+        }
+    }
+
+    /**
+     * 点击处理队列中的下拉按钮
+     */
+    async clickDropdownButton() {
+        try {
+            console.log('🔽 点击处理队列下拉按钮...');
+
+            // 基于提供的完整HTML结构创建精确选择器
+            const dropdownSelectors = [
+                // 最精确的选择器 - 基于完整的HTML结构
+                'div[data-slot="card-header"] button.size-7:has(svg.lucide-chevron-down)',
+                'div[data-slot="card-header"] button[class*="size-7"][class*="p-0"]:has(svg.lucide-chevron-down)',
+
+                // 基于处理队列容器的选择器
+                'div:has(div[data-slot="card-title"]:has-text("处理队列")) button:has(svg.lucide-chevron-down)',
+                'div:has(div:has-text("处理队列")) button.size-7:has(svg)',
+
+                // 基于按钮特征的选择器
+                'button.inline-flex.size-7.p-0:has(svg.lucide-chevron-down)',
+                'button[class*="size-7"][class*="p-0"]:has(svg[class*="chevron-down"])',
+
+                // 基于SVG路径的选择器
+                'button:has(svg path[d="m6 9 6 6 6-6"])',
+                'button.size-7:has(svg path[d="m6 9 6 6 6-6"])',
+
+                // 基于容器层级的选择器
+                'div.flex.items-center.gap-1 button:last-child:has(svg.lucide-chevron-down)',
+                'div.flex.items-center.justify-between div.flex.items-center.gap-1 button:last-child',
+
+                // 通用备选选择器
+                'button.size-7:has(svg.lucide-chevron-down)',
+                'button[class*="p-0"]:has(svg.lucide-chevron-down)',
+                'button:has(svg.lucide-chevron-down.size-4)'
+            ];
+
+            for (const selector of dropdownSelectors) {
+                try {
+                    const button = this.page.locator(selector).first();
+                    if (await button.isVisible()) {
+                        console.log(`✅ 找到处理队列下拉按钮，点击: ${selector}`);
+                        await button.click();
+                        await this.page.waitForTimeout(1000);
+                        console.log('✅ 处理队列下拉按钮点击成功');
+                        return;
+                    }
+                } catch (error) {
+                    continue;
+                }
+            }
+
+            console.log('⚠️ 未找到处理队列下拉按钮，继续执行...');
+
+        } catch (error) {
+            console.log(`⚠️ 点击处理队列下拉按钮时出错: ${error.message}`);
         }
     }
 
@@ -366,8 +850,8 @@ class BibiGPTAutomation {
             // 2. 导航到注册页面
             await this.navigateToRegisterPage();
 
-            // 3. 设置广告拦截
-            await this.setupAdBlocking();
+            // 3. 按ESC关闭弹窗
+            await this.pressEscapeToClosePopups();
 
             // 4. 自动注册
             console.log('📝 第一阶段：自动注册');
@@ -380,11 +864,8 @@ class BibiGPTAutomation {
             // 等待注册后页面稳定
             await this.page.waitForTimeout(3000);
 
-            // 5. 处理视频链接
-            const videoResult = await this.processVideoLink();
-
-            // 6. 监控content页面并保存
-            const contentResult = await this.monitorContentPage();
+            // 5. 开始视频循环处理（包含第一轮）
+            const loopResult = await this.startVideoLoop();
 
             console.log('');
             console.log('🎉 自动化流程完成！');
@@ -392,8 +873,7 @@ class BibiGPTAutomation {
             return {
                 success: true,
                 register: registerResult,
-                video: videoResult,
-                content: contentResult
+                loop: loopResult
             };
             
         } catch (error) {

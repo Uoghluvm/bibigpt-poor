@@ -5,61 +5,7 @@ class AdBlocker {
         this.blockedCount = 0;
     }
 
-    /**
-     * 设置CSS注入广告拦截
-     * @param {Page} page - Playwright页面对象
-     */
-    async setupCSSBlocking(page) {
-        console.log('🛡️ 设置CSS广告拦截...');
-        
-        await page.addStyleTag({
-            content: `
-                /* 隐藏广告弹窗 */
-                div[role="dialog"][data-state="open"]:has(h2:contains("返校季")),
-                div[role="dialog"][data-state="open"]:has(h2:contains("欢迎加入")),
-                div[role="dialog"][data-state="open"]:has(h2:contains("特惠")),
-                div[role="dialog"][data-state="open"]:has(h2:contains("优惠")),
-                div[role="dialog"][data-state="open"]:has(h2:contains("限时")) {
-                    display: none !important;
-                    visibility: hidden !important;
-                    opacity: 0 !important;
-                    pointer-events: none !important;
-                }
 
-                /* 隐藏弹窗背景遮罩 */
-                div[data-radix-portal] div[data-state="open"][data-slot="dialog-overlay"] {
-                    display: none !important;
-                    pointer-events: none !important;
-                }
-
-                /* 隐藏引导遮罩层 (Driver Overlay) */
-                .driver-overlay,
-                .driver-overlay-animated,
-                svg.driver-overlay,
-                svg.driver-overlay-animated,
-                svg[class*="driver-overlay"] {
-                    display: none !important;
-                    visibility: hidden !important;
-                    opacity: 0 !important;
-                    pointer-events: none !important;
-                    z-index: -1 !important;
-                }
-
-                /* 隐藏常见广告容器 */
-                .ad-container,
-                .advertisement,
-                .ads-banner,
-                [class*="ad-"],
-                [id*="ad-"],
-                [class*="ads-"],
-                [id*="ads-"] {
-                    display: none !important;
-                }
-            `
-        });
-        
-        console.log('✅ CSS广告拦截已设置');
-    }
 
     /**
      * 设置模态弹窗监听和ESC拦截
@@ -253,15 +199,12 @@ class AdBlocker {
     async startBlocking(page) {
         if (this.isActive) return;
         
-        console.log('🚀 启动完整广告拦截系统...');
-        
-        // 1. CSS注入拦截
-        await this.setupCSSBlocking(page);
+        console.log('🚀 启动广告拦截系统（仅DOM监听和ESC键）...');
 
-        // 2. 模态弹窗监听拦截
+        // 1. 模态弹窗监听拦截
         await this.setupModalDialogBlocking(page);
 
-        // 3. 关闭当前广告
+        // 2. 关闭当前广告
         await this.closeCurrentAds(page);
         
         this.isActive = true;

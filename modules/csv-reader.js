@@ -154,6 +154,43 @@ class CSVReader {
     }
 
     /**
+     * 在CSV文件的指定行第三列添加备注
+     * @param {number} row - 行号（从0开始）
+     * @param {string} note - 备注内容
+     * @param {string} filePath - CSV文件路径
+     */
+    addNoteToCSV(row, note, filePath) {
+        try {
+            console.log(`📝 在第 ${row + 1} 行第3列添加备注: ${note}`);
+
+            // 确保第三列存在
+            if (this.csvData[row].length < 3) {
+                // 补齐到第三列
+                while (this.csvData[row].length < 3) {
+                    this.csvData[row].push('');
+                }
+            }
+
+            // 添加备注到第三列
+            this.csvData[row][2] = note;
+
+            // 将更新后的数据写回文件
+            const csvContent = this.csvData.map(row =>
+                row.map(cell => `"${cell}"`).join(',')
+            ).join('\n');
+
+            fs.writeFileSync(filePath, csvContent, 'utf-8');
+            console.log(`✅ CSV备注添加成功: 第 ${row + 1} 行第3列 = "${note}"`);
+
+            return true;
+
+        } catch (error) {
+            console.error(`❌ 添加CSV备注失败: ${error.message}`);
+            return false;
+        }
+    }
+
+    /**
      * 创建示例CSV文件
      * @param {string} filePath - 文件路径
      */
