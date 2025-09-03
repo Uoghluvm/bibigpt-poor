@@ -1,0 +1,200 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# 环境变量
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 日志文件
+logs/
+*.log
+
+# 运行时数据
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# 覆盖率目录
+coverage/
+.nyc_output/
+
+# 依赖目录
+jspm_packages/
+
+# TypeScript 缓存
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+
+# Nuxt.js build / generate output
+.nuxt
+dist
+
+# Gatsby files
+.cache/
+public
+
+# Storybook build outputs
+.out
+.storybook-out
+
+# Temporary folders
+tmp/
+temp/
+
+# 浏览器相关文件
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# 保存的页面内容（通常很大，不需要上传）
+saved-pages/
+*.png
+*.pdf
+*.html
+*.htm
+
+# CSV数据文件（可能包含敏感信息）
+*.csv
+youtube-*.csv
+bilibili-*.csv
+links.csv
+
+# 错误截图
+error-screenshot.png
+error-*.png
+
+# 生成的脚本文件
+user-recorded-actions.js
+user-actions-data.json
+recorded-*.js
+recorded-*.json
+
+# 系统文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+*.lnk
+
+# Linux
+*~
+
+# 编辑器和IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# 备份文件
+*.bak
+*.backup
+*.old
+
+# 压缩文件
+*.zip
+*.rar
+*.7z
+*.tar.gz
+*.tar.bz2
+
+# 配置文件（可能包含敏感信息）
+config.json
+settings.json
+credentials.json
+
+# 测试文件
+test-*.js
+*-test.js
+*.test.js
+*.spec.js
+
+# 构建输出
+build/
+dist/
+out/
+
+# 缓存
+.cache/
+*.cache
+
+# 临时文件
+*.tmp
+*.temp
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 证书文件
+*.pem
+*.key
+*.crt
+*.cert
+
+# 其他敏感文件
+secrets/
+private/
+.secrets
+.private

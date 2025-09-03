@@ -25,13 +25,26 @@ class AdBlocker {
                     opacity: 0 !important;
                     pointer-events: none !important;
                 }
-                
+
                 /* 隐藏弹窗背景遮罩 */
                 div[data-radix-portal] div[data-state="open"][data-slot="dialog-overlay"] {
                     display: none !important;
                     pointer-events: none !important;
                 }
-                
+
+                /* 隐藏引导遮罩层 (Driver Overlay) */
+                .driver-overlay,
+                .driver-overlay-animated,
+                svg.driver-overlay,
+                svg.driver-overlay-animated,
+                svg[class*="driver-overlay"] {
+                    display: none !important;
+                    visibility: hidden !important;
+                    opacity: 0 !important;
+                    pointer-events: none !important;
+                    z-index: -1 !important;
+                }
+
                 /* 隐藏常见广告容器 */
                 .ad-container,
                 .advertisement,
@@ -58,7 +71,7 @@ class AdBlocker {
         await page.evaluate(() => {
             let blockedCount = 0;
 
-            // 检测模态弹窗的函数
+            // 检测模态弹窗和遮罩层的函数
             const isModalDialog = (element) => {
                 // 检查是否是模态弹窗
                 const hasDialogRole = element.getAttribute('role') === 'dialog';
@@ -70,13 +83,25 @@ class AdBlocker {
                     element.className.includes('backdrop')
                 );
 
+                // 检查是否是引导遮罩层（driver overlay）
+                const isDriverOverlay = element.className && (
+                    element.className.includes('driver-overlay') ||
+                    element.className.includes('driver-overlay-animated')
+                );
+
+                // 检查是否是SVG遮罩层
+                const isSVGOverlay = element.tagName === 'svg' && (
+                    element.className.baseVal?.includes('driver-overlay') ||
+                    element.getAttribute('class')?.includes('driver-overlay')
+                );
+
                 // 检查样式特征
                 const style = window.getComputedStyle(element);
                 const isFixed = style.position === 'fixed';
-                const hasHighZIndex = parseInt(style.zIndex) >= 50;
+                const hasHighZIndex = parseInt(style.zIndex) >= 1000; // 降低阈值以捕获更多遮罩
                 const coversScreen = element.getBoundingClientRect().width > window.innerWidth * 0.5;
 
-                return hasDialogRole || hasDataState || hasModalClass || (isFixed && hasHighZIndex && coversScreen);
+                return hasDialogRole || hasDataState || hasModalClass || isDriverOverlay || isSVGOverlay || (isFixed && hasHighZIndex && coversScreen);
             };
 
             // 自动按ESC关闭模态弹窗的函数
@@ -120,14 +145,14 @@ class AdBlocker {
                 mutations.forEach((mutation) => {
                     mutation.addedNodes.forEach((node) => {
                         if (node.nodeType === 1) {
-                            // 检查新添加的元素是否是模态弹窗
+                            // 检查新添加的元素是否是模态弹窗或遮罩层
                             if (isModalDialog(node)) {
                                 autoCloseModal(node);
                             }
 
-                            // 检查子元素中的模态弹窗
+                            // 检查子元素中的模态弹窗和遮罩层
                             if (node.querySelectorAll) {
-                                const modalElements = node.querySelectorAll('div[role="dialog"], div[data-state="open"], .modal, .dialog');
+                                const modalElements = node.querySelectorAll('div[role="dialog"], div[data-state="open"], .modal, .dialog, .driver-overlay, svg.driver-overlay');
                                 modalElements.forEach(modal => {
                                     if (isModalDialog(modal)) {
                                         autoCloseModal(modal);
@@ -155,11 +180,12 @@ class AdBlocker {
                 attributeFilter: ['data-state', 'role', 'class', 'style']
             });
 
-            // 定期检查现有的模态弹窗
+            // 定期检查现有的模态弹窗和遮罩层
             const checkExistingModals = () => {
-                const existingModals = document.querySelectorAll('div[role="dialog"], div[data-state="open"], .modal, .dialog');
+                const existingModals = document.querySelectorAll('div[role="dialog"], div[data-state="open"], .modal, .dialog, .driver-overlay, svg.driver-overlay, svg[class*="driver-overlay"]');
                 existingModals.forEach(modal => {
                     if (isModalDialog(modal) && modal.offsetParent !== null) {
+                        console.log('🎯 定期检查发现遮罩层:', modal.tagName, modal.className);
                         autoCloseModal(modal);
                     }
                 });

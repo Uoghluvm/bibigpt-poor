@@ -129,11 +129,11 @@ class FormFiller {
             
             // 清空现有内容
             await emailInput.clear();
-            await page.waitForTimeout(300);
-            
+            await page.waitForTimeout(100);
+
             // 填写邮箱
             await emailInput.fill(email);
-            await page.waitForTimeout(500);
+            await page.waitForTimeout(200);
             
             // 验证填写结果
             const value = await emailInput.inputValue();
@@ -163,11 +163,11 @@ class FormFiller {
             
             // 清空现有内容
             await passwordInput.clear();
-            await page.waitForTimeout(300);
-            
+            await page.waitForTimeout(100);
+
             // 填写密码
             await passwordInput.fill(password);
-            await page.waitForTimeout(500);
+            await page.waitForTimeout(200);
             
             // 验证填写结果（密码框通常不能读取值，所以只检查是否有内容）
             const value = await passwordInput.inputValue();
@@ -279,49 +279,35 @@ class FormFiller {
         this.filledFields = [];
     }
 
+
+
     /**
-     * 智能查找首页按钮
+     * 智能查找首页按钮（基于提供的具体元素）
      * @param {Page} page - Playwright页面对象
      * @returns {Locator} 首页按钮定位器
      */
     async findHomeButton(page) {
         const homeSelectors = [
-            // 文本选择器
+            // 基于提供的具体元素的精确选择器
+            'button[data-sidebar="menu-button"]:has(span:has-text("首页"))',
+            'button[data-sidebar="menu-button"]:has(svg.lucide-house)',
+            'button[data-slot="tooltip-trigger"]:has(span:has-text("首页"))',
+
+            // 基于类名和属性的组合选择器
+            'button.peer\\/menu-button:has(span:has-text("首页"))',
+            'button[data-size="default"][data-active="false"]:has(span:has-text("首页"))',
+
+            // 基于SVG图标的选择器
+            'button:has(svg.lucide-house):has(span:has-text("首页"))',
+            'button:has(svg[class*="lucide-house"])',
+
+            // 通用的首页按钮选择器
             'button:has-text("首页")',
-            'a:has-text("首页")',
-            'button:has-text("Home")',
-            'a:has-text("Home")',
-            'button:has-text("主页")',
-            'a:has-text("主页")',
+            'button:has(span:has-text("首页"))',
 
-            // 导航相关选择器
-            'nav button:has-text("首页")',
-            'nav a:has-text("首页")',
-            '.nav button:has-text("首页")',
-            '.nav a:has-text("首页")',
-            '.navbar button:has-text("首页")',
-            '.navbar a:has-text("首页")',
-
-            // 通用导航选择器
-            '[href="/"]',
-            '[href="/home"]',
-            '[href="/index"]',
-            'a[class*="home"]',
-            'button[class*="home"]',
-
-            // ID和类名选择器
-            '#home',
-            '#homepage',
-            '.home-button',
-            '.home-link',
-
-            // 图标相关选择器
-            'button:has(svg):has-text("首页")',
-            'a:has(svg):has-text("首页")',
-            'button[aria-label*="首页"]',
-            'a[aria-label*="首页"]',
-            'button[title*="首页"]',
-            'a[title*="首页"]'
+            // 基于data属性的选择器
+            'button[data-sidebar="menu-button"]',
+            'button[data-slot="tooltip-trigger"]'
         ];
 
         for (const selector of homeSelectors) {
@@ -404,6 +390,120 @@ class FormFiller {
     }
 
     /**
+     * 智能查找视频链接输入框
+     * @param {Page} page - Playwright页面对象
+     * @returns {Locator} 视频链接输入框定位器
+     */
+    async findVideoLinkInput(page) {
+        const linkInputSelectors = [
+            // 基于提供的具体元素的精确选择器
+            'textarea[data-slot="textarea"][placeholder*="Enter video/audio links"]',
+            'textarea[placeholder*="Enter video/audio links"]',
+            'textarea[placeholder*="supports batch input"]',
+
+            // 基于类名的选择器
+            'textarea.border-input[placeholder*="video"]',
+            'textarea.border-input[placeholder*="audio"]',
+            'textarea.border-input[placeholder*="links"]',
+
+            // 通用的文本输入选择器
+            'textarea[data-slot="textarea"]',
+            'textarea.resize-none',
+            'textarea[placeholder*="Enter"]',
+
+            // 基于容器的选择器
+            'div.relative textarea',
+            '.w-full textarea'
+        ];
+
+        for (const selector of linkInputSelectors) {
+            try {
+                const element = page.locator(selector).first();
+                if (await element.isVisible()) {
+                    console.log(`✅ 找到视频链接输入框: ${selector}`);
+                    return element;
+                }
+            } catch (error) {
+                continue;
+            }
+        }
+
+        throw new Error('❌ 未找到视频链接输入框');
+    }
+
+    /**
+     * 输入视频链接
+     * @param {Page} page - Playwright页面对象
+     * @param {string} link - 视频链接
+     * @param {Object} options - 输入选项
+     */
+    async inputVideoLink(page, link, options = {}) {
+        console.log('🔗 输入视频链接...');
+
+        const { clearFirst = true, pressEnter = true, waitAfterInput = 1000 } = options;
+
+        try {
+            const linkInput = await this.findVideoLinkInput(page);
+
+            // 等待输入框可用
+            await linkInput.waitFor({ state: 'visible', timeout: 10000 });
+
+            // 清空现有内容
+            if (clearFirst) {
+                await linkInput.clear();
+                await page.waitForTimeout(300);
+            }
+
+            // 输入链接
+            await linkInput.fill(link);
+            console.log(`✅ 视频链接输入成功: ${link}`);
+
+            // 等待输入完成
+            if (waitAfterInput > 0) {
+                await page.waitForTimeout(waitAfterInput);
+            }
+
+            // 按Enter提交
+            if (pressEnter) {
+                console.log('⌨️ 按Enter提交...');
+                await linkInput.press('Enter');
+                console.log('✅ Enter键已按下');
+
+                // 等待提交处理（5秒）
+                console.log('⏰ 等待5秒处理结果...');
+                await page.waitForTimeout(5000);
+                console.log('✅ 等待完成');
+            }
+
+            this.filledFields.push({
+                type: 'video_link_input',
+                success: true,
+                link: link,
+                pressedEnter: pressEnter
+            });
+
+            return {
+                success: true,
+                link: link,
+                pressedEnter: pressEnter
+            };
+
+        } catch (error) {
+            console.error(`❌ 输入视频链接失败: ${error.message}`);
+            this.filledFields.push({
+                type: 'video_link_input',
+                success: false,
+                error: error.message
+            });
+
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
      * 检查表单是否存在
      * @param {Page} page - Playwright页面对象
      * @returns {Object} 表单检查结果
@@ -413,7 +513,8 @@ class FormFiller {
             hasEmailInput: false,
             hasPasswordInput: false,
             hasSubmitButton: false,
-            hasHomeButton: false
+            hasHomeButton: false,
+            hasVideoLinkInput: false
         };
 
         try {
@@ -442,6 +543,13 @@ class FormFiller {
             result.hasHomeButton = true;
         } catch (error) {
             // 首页按钮不存在
+        }
+
+        try {
+            await this.findVideoLinkInput(page);
+            result.hasVideoLinkInput = true;
+        } catch (error) {
+            // 视频链接输入框不存在
         }
 
         result.isComplete = result.hasEmailInput && result.hasPasswordInput && result.hasSubmitButton;

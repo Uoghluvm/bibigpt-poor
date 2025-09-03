@@ -5,6 +5,8 @@ const { chromium } = require('playwright');
 const { EmailGenerator } = require('./modules/email-generator');
 const { AdBlocker } = require('./modules/ad-blocker');
 const { FormFiller } = require('./modules/form-filler');
+const { CSVReader } = require('./modules/csv-reader');
+const { PageSaver } = require('./modules/page-saver');
 
 // 🎯 主自动化类
 class BibiGPTAutomation {
@@ -17,10 +19,14 @@ class BibiGPTAutomation {
         this.emailGenerator = new EmailGenerator();
         this.adBlocker = new AdBlocker();
         this.formFiller = new FormFiller();
+        this.csvReader = new CSVReader();
+        this.pageSaver = new PageSaver();
         
         // 配置
         this.config = {
-            url: 'https://bibigpt.co/r/bilibili',
+            registerUrl: 'https://bibigpt.co/r/bilibili',
+            desktopUrl: 'https://bibigpt.co/desktop',
+            csvFilePath: 'youtube-2025-09-01.csv',
             headless: false,
             slowMo: 500,
             timeout: 30000
@@ -45,21 +51,39 @@ class BibiGPTAutomation {
     }
 
     /**
-     * 导航到目标页面
+     * 导航到注册页面
      */
-    async navigateToPage() {
-        console.log('🌐 导航到BibiGPT页面...');
-        
-        await this.page.goto(this.config.url, {
+    async navigateToRegisterPage() {
+        console.log('🌐 导航到BibiGPT注册页面...');
+
+        await this.page.goto(this.config.registerUrl, {
             waitUntil: 'domcontentloaded',
             timeout: this.config.timeout
         });
-        
+
         // 等待页面加载完成
         await this.page.waitForTimeout(2000);
-        
+
         const title = await this.page.title();
-        console.log(`✅ 页面加载完成: ${title}`);
+        console.log(`✅ 注册页面加载完成: ${title}`);
+    }
+
+    /**
+     * 导航到桌面版页面
+     */
+    async navigateToDesktopPage() {
+        console.log('🌐 导航到BibiGPT桌面版页面...');
+
+        await this.page.goto(this.config.desktopUrl, {
+            waitUntil: 'domcontentloaded',
+            timeout: this.config.timeout
+        });
+
+        // 等待页面加载完成
+        await this.page.waitForTimeout(3000);
+
+        const title = await this.page.title();
+        console.log(`✅ 桌面版页面加载完成: ${title}`);
     }
 
     /**
@@ -103,7 +127,7 @@ class BibiGPTAutomation {
                 password: email // 使用邮箱作为密码
             }, {
                 forceSubmit: true, // 强制点击，忽略遮罩层
-                waitBetweenSteps: 1000
+                waitBetweenSteps: 300 // 减少步骤间等待时间，加快速度
             });
             
             if (!formResult.success) {
@@ -130,73 +154,178 @@ class BibiGPTAutomation {
         }
     }
 
+
+
     /**
-     * 点击首页按钮
+     * 处理视频链接输入
      */
-    async clickHomePage() {
+    async processVideoLink() {
         console.log('');
-        console.log('🏠 ==========================================');
-        console.log('🏠 第二阶段：点击首页按钮');
-        console.log('🏠 ==========================================');
+        console.log('🔗 ==========================================');
+        console.log('🔗 第二阶段：处理视频链接');
+        console.log('🔗 ==========================================');
 
         try {
-            // 等待页面稳定（3秒）
-            console.log('⏰ 等待3秒后点击首页按钮...');
-            await this.page.waitForTimeout(3000);
+            // 1. 读取CSV文件
+            console.log('📊 读取CSV文件...');
 
-            // 点击首页按钮
-            const homeResult = await this.formFiller.clickHomeButton(this.page, {
-                force: true, // 强制点击，忽略可能的遮罩
-                timeout: 10000,
-                waitAfterClick: 3000
+            // 检查CSV文件是否存在，如果不存在则创建示例文件
+            const fs = require('fs');
+            if (!fs.existsSync(this.config.csvFilePath)) {
+                console.log('⚠️ CSV文件不存在，创建示例文件...');
+                this.csvReader.createSampleCSV(this.config.csvFilePath);
+            }
+
+            // 读取CSV数据
+            this.csvReader.readCSV(this.config.csvFilePath);
+
+            // 获取第一列第二行的链接
+            const videoLink = this.csvReader.getFirstColumnSecondRow();
+            console.log(`🎯 获取到视频链接: ${videoLink}`);
+
+            // 验证链接格式
+            if (!this.csvReader.validateLink(videoLink)) {
+                throw new Error(`无效的链接格式: ${videoLink}`);
+            }
+
+            // 2. 导航到桌面版页面
+            await this.navigateToDesktopPage();
+
+            // 3. 输入视频链接
+            console.log('📝 输入视频链接到页面...');
+            const inputResult = await this.formFiller.inputVideoLink(this.page, videoLink, {
+                clearFirst: true,
+                pressEnter: true,
+                waitAfterInput: 1000
             });
 
-            if (homeResult.success) {
-                console.log('✅ 成功跳转到首页');
-                console.log(`📍 页面标题: ${homeResult.title}`);
-                console.log(`🔗 页面URL: ${homeResult.url}`);
+            if (inputResult.success) {
+                console.log('✅ 视频链接处理成功');
+                console.log(`� 处理的链接: ${inputResult.link}`);
+                console.log(`⌨️ 已按Enter提交: ${inputResult.pressedEnter}`);
 
                 return {
                     success: true,
-                    title: homeResult.title,
-                    url: homeResult.url
+                    link: videoLink,
+                    inputResult: inputResult
                 };
             } else {
-                throw new Error(`首页跳转失败: ${homeResult.error}`);
+                throw new Error(`视频链接输入失败: ${inputResult.error}`);
             }
 
         } catch (error) {
-            console.error(`❌ 点击首页失败: ${error.message}`);
+            console.error(`❌ 处理视频链接失败: ${error.message}`);
 
-            // 尝试备用方案：直接导航到首页
-            console.log('🔄 尝试备用方案：直接导航到首页...');
-            try {
-                await this.page.goto('https://bibigpt.co/', {
-                    waitUntil: 'domcontentloaded',
-                    timeout: 10000
-                });
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
 
-                const title = await this.page.title();
-                const url = this.page.url();
+    /**
+     * 监控content页面并保存内容
+     */
+    async monitorContentPage() {
+        console.log('');
+        console.log('👀 ==========================================');
+        console.log('👀 第三阶段：监控content页面');
+        console.log('👀 ==========================================');
 
-                console.log('✅ 备用方案成功');
-                console.log(`📍 页面标题: ${title}`);
-                console.log(`🔗 页面URL: ${url}`);
+        try {
+            console.log('🔍 开始监控页面URL变化...');
+
+            // 等待页面跳转到content页面
+            let contentPageReached = false;
+            let attempts = 0;
+            const maxAttempts = 30; // 最多等待30次，每次2秒
+
+            while (!contentPageReached && attempts < maxAttempts) {
+                const currentUrl = this.page.url();
+                console.log(`🔗 当前URL: ${currentUrl}`);
+
+                // 检查是否到达content页面
+                if (currentUrl.includes('/content/')) {
+                    console.log('✅ 检测到content页面！');
+                    contentPageReached = true;
+                    break;
+                }
+
+                attempts++;
+                console.log(`⏰ 等待页面跳转... (${attempts}/${maxAttempts})`);
+                await this.page.waitForTimeout(2000);
+            }
+
+            if (!contentPageReached) {
+                throw new Error('超时：未检测到content页面');
+            }
+
+            // 等待content页面完全加载
+            console.log('⏰ 等待content页面完全加载...');
+            await this.page.waitForTimeout(3000);
+
+            // 检测并关闭driver overlay
+            console.log('🛡️ 检测并关闭遮罩层...');
+            await this.handleDriverOverlay();
+
+            // 等待内容稳定
+            console.log('⏰ 等待内容稳定...');
+            await this.page.waitForTimeout(2000);
+
+            // 保存完整页面内容
+            console.log('💾 保存完整页面内容...');
+            const saveResult = await this.pageSaver.saveCompletePage(this.page);
+
+            if (saveResult.success) {
+                console.log('✅ 页面内容保存成功！');
+                console.log(`📁 保存目录: ${saveResult.directory}`);
+                console.log(`🌐 离线查看: ${saveResult.files.offline}`);
 
                 return {
                     success: true,
-                    title: title,
-                    url: url,
-                    method: 'direct_navigation'
+                    url: this.page.url(),
+                    saveResult: saveResult
                 };
-
-            } catch (navError) {
-                console.error(`❌ 备用方案也失败: ${navError.message}`);
-                return {
-                    success: false,
-                    error: `点击首页和直接导航都失败: ${error.message}, ${navError.message}`
-                };
+            } else {
+                throw new Error(`页面保存失败: ${saveResult.error}`);
             }
+
+        } catch (error) {
+            console.error(`❌ 监控content页面失败: ${error.message}`);
+
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * 处理driver overlay遮罩层 - 按指定时序按ESC
+     */
+    async handleDriverOverlay() {
+        try {
+            console.log('🎯 开始处理遮罩层...');
+
+            // 第一次按ESC
+            console.log('⌨️ 第1次按ESC键...');
+            await this.page.keyboard.press('Escape');
+
+            // 等待3秒
+            console.log('⏰ 等待3秒...');
+            await this.page.waitForTimeout(3000);
+
+            // 第二次按ESC
+            console.log('⌨️ 第2次按ESC键...');
+            await this.page.keyboard.press('Escape');
+
+            // 等待1秒确保处理完成
+            await this.page.waitForTimeout(1000);
+
+            console.log('✅ 遮罩层处理完成（按ESC两次，间隔3秒）');
+
+        } catch (error) {
+            console.log(`⚠️ 处理遮罩层时出错: ${error.message}`);
         }
     }
 
@@ -234,25 +363,28 @@ class BibiGPTAutomation {
             // 1. 初始化浏览器
             await this.initBrowser();
             
-            // 2. 导航到页面
-            await this.navigateToPage();
-            
+            // 2. 导航到注册页面
+            await this.navigateToRegisterPage();
+
             // 3. 设置广告拦截
             await this.setupAdBlocking();
-            
+
             // 4. 自动注册
             console.log('📝 第一阶段：自动注册');
             const registerResult = await this.autoRegister();
-            
+
             if (!registerResult.success) {
                 throw new Error(`自动注册失败: ${registerResult.error}`);
             }
-            
+
             // 等待注册后页面稳定
             await this.page.waitForTimeout(3000);
 
-            // 5. 点击首页按钮
-            const homeResult = await this.clickHomePage();
+            // 5. 处理视频链接
+            const videoResult = await this.processVideoLink();
+
+            // 6. 监控content页面并保存
+            const contentResult = await this.monitorContentPage();
 
             console.log('');
             console.log('🎉 自动化流程完成！');
@@ -260,7 +392,8 @@ class BibiGPTAutomation {
             return {
                 success: true,
                 register: registerResult,
-                homepage: homeResult
+                video: videoResult,
+                content: contentResult
             };
             
         } catch (error) {
@@ -277,14 +410,13 @@ class BibiGPTAutomation {
                 error: error.message
             };
         } finally {
-            // 保持浏览器打开10秒让用户查看结果
+            // 保持浏览器打开，不自动关闭
             console.log('');
-            console.log('浏览器将在10秒后关闭...');
-            if (this.page) {
-                await this.page.waitForTimeout(10000);
-            }
-            
-            await this.cleanup();
+            console.log('🎉 流程完成！浏览器将保持打开状态，请手动关闭。');
+            console.log('💡 你可以继续在浏览器中查看结果或进行其他操作。');
+
+            // 不调用cleanup()，让浏览器保持打开
+            // await this.cleanup();
         }
     }
 }
@@ -293,12 +425,18 @@ class BibiGPTAutomation {
 async function main() {
     const automation = new BibiGPTAutomation();
     const result = await automation.run();
-    
+
     if (result.success) {
         console.log('🎉 程序执行成功！');
-        process.exit(0);
+        console.log('🌐 浏览器保持打开状态，Node.js进程继续运行...');
+        console.log('💡 要完全退出，请手动关闭浏览器或按 Ctrl+C');
+
+        // 不调用 process.exit()，让进程保持运行
+        // 这样浏览器就不会被强制关闭
+        return result;
     } else {
         console.log('❌ 程序执行失败！');
+        console.log('🌐 浏览器可能已关闭，Node.js进程将退出');
         process.exit(1);
     }
 }
