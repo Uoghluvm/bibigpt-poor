@@ -1,5 +1,7 @@
 # BibiGPT 自动化系统 v2.0
 
+**Language / 语言**: [English](README_EN.md) | 中文
+
 🤖 一个完全自动化的BibiGPT视频总结系统，支持批量处理YouTube视频、智能错误处理、自动账号管理等高级功能。
 
 ## 🙏 特别感谢
