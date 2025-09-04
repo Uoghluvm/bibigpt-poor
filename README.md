@@ -2,6 +2,22 @@
 
 🤖 一个完全自动化的BibiGPT视频总结系统，支持批量处理YouTube视频、智能错误处理、自动账号管理等高级功能。
 
+## 🙏 特别感谢
+
+**感谢 [BibiGPT](https://github.com/JimmyLv/BibiGPT-v1) 项目的开发者！**
+
+本自动化系统基于 [BibiGPT-v1](https://github.com/JimmyLv/BibiGPT-v1) 这个优秀的开源项目构建。BibiGPT 是一个非常棒的 AI 音视频内容总结工具，为用户提供了免费的视频内容总结服务。
+
+- 🎯 **项目地址**: https://github.com/JimmyLv/BibiGPT-v1
+- 🌐 **在线服务**: https://bibigpt.co
+- 👨‍💻 **开发者**: [@JimmyLv](https://github.com/JimmyLv)
+
+**非常感谢开发者的无私奉献，为我们提供如此优秀的免费工具！**
+
+如果 BibiGPT 项目的开发者或维护者希望我删除此自动化工具，请随时联系我，我会立即删除。本项目仅用于学习和研究自动化技术，无任何商业用途。
+
+---
+
 ## ✨ 核心功能特性
 
 ### 🚀 自动化处理
